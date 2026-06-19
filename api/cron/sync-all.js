@@ -2,10 +2,13 @@
 // Vercel Cron Job — configura em vercel.json
 // Roda automaticamente todo dia às 06:00 BRT (09:00 UTC)
 // Também pode ser chamado manualmente via POST /api/cron/sync-all
-
-export const config = {
-  maxDuration: 60, // segundos — plano Pro do Vercel permite até 300
-}
+//
+// ATENÇÃO: no plano Hobby (gratuito) da Vercel, toda função serverless
+// tem limite de 10s de execução. Como este endpoint chama duas outras
+// rotas (ML + Shopee) que paginam muitos pedidos, ele pode estourar esse
+// limite se o catálogo crescer muito. Nesse caso, é necessário plano Pro
+// (limite de até 300s) ou dividir a sincronização em duas rotas separadas
+// chamadas pelo cron em horários diferentes.
 
 export default async function handler(req, res) {
   // Vercel Cron envia header Authorization com o cron secret

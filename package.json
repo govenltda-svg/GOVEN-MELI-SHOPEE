@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Dashboard financeiro e logístico Goven — ML + Shopee + Amazon",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev":   "vercel dev",
     "build": "echo 'static site — no build needed'",
