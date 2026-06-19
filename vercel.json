@@ -1,0 +1,23 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-all",
+      "schedule": "0 9 * * *"
+    }
+  ],
+  "functions": {
+    "api/sync/mercadolivre.js": { "maxDuration": 60 },
+    "api/sync/shopee.js":       { "maxDuration": 60 },
+    "api/cron/sync-all.js":     { "maxDuration": 120 },
+    "api/pedidos.js":           { "maxDuration": 10 }
+  },
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options",        "value": "DENY" }
+      ]
+    }
+  ]
+}
