@@ -3,6 +3,7 @@
 // Endpoint: POST /api/sync/mercadolivre
 
 import { neon } from '@neondatabase/serverless'
+import { renovarTokenSeNecessario } from '../auth/ml-refresh.js'
 
 const sql = neon(process.env.DATABASE_URL)
 
@@ -28,10 +29,10 @@ function normalizarStatus(status) {
   return map[status] || 'transito'
 }
 
-async function fetchPaginaML(limit, offset) {
+async function fetchPaginaML(limit, offset, accessToken, sellerId) {
   const resp = await fetch(
-    `https://api.mercadolibre.com/orders/search?seller=${process.env.ML_SELLER_ID}&sort=date_desc&limit=${limit}&offset=${offset}`,
-    { headers: { Authorization: `Bearer ${process.env.ML_ACCESS_TOKEN}` } }
+    `https://api.mercadolibre.com/orders/search?seller=${sellerId}&sort=date_desc&limit=${limit}&offset=${offset}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
   )
   if (!resp.ok) throw new Error(`ML API erro ${resp.status}: ${await resp.text()}`)
   const data = await resp.json()
@@ -92,12 +93,19 @@ export default async function handler(req, res) {
   let totalProcessados = 0
 
   try {
+    // Renova o token automaticamente se necessário, e busca o seller_id salvo
+    const accessToken = await renovarTokenSeNecessario()
+    const tokenRow     = await sql`select user_id from ml_tokens where id = 1`
+    const sellerId     = tokenRow[0]?.user_id
+
+    if (!sellerId) throw new Error('seller_id não encontrado — refaça a autorização inicial')
+
     const LIMIT = 50
     let offset = 0
     let totalAPI = Infinity
 
     while (offset < totalAPI) {
-      const { orders, total } = await fetchPaginaML(LIMIT, offset)
+      const { orders, total } = await fetchPaginaML(LIMIT, offset, accessToken, sellerId)
       totalAPI = total
 
       const novos = await gravarPedidos(orders)
