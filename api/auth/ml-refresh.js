@@ -26,6 +26,15 @@ export async function renovarTokenSeNecessario() {
     return tokenAtual.access_token
   }
 
+  // Sem refresh_token salvo, não há como renovar automaticamente —
+  // é necessário reautorizar manualmente via /api/auth/ml-callback
+  if (!tokenAtual.refresh_token) {
+    throw new Error(
+      'Token expirado e não há refresh_token salvo. ' +
+      'Reautorize manualmente acessando a URL de autorização do ML novamente.'
+    )
+  }
+
   // Renova usando o refresh_token
   const resp = await fetch('https://api.mercadolibre.com/oauth/token', {
     method: 'POST',

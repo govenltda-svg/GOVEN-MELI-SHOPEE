@@ -65,24 +65,34 @@ export default async function handler(req, res) {
       `)
     }
 
+    // Alguns tipos de aplicação do ML não emitem refresh_token (ex: aplicações
+    // "Server-Side" sem PKCE configurado corretamente). Sem ele, a renovação
+    // automática não vai funcionar e será necessário reautorizar manualmente
+    // quando o access_token expirar (a cada ~6h).
+    const refreshToken = tokenData.refresh_token || null
+    const semRefresh = !refreshToken
+
     // Salva o token no banco — cria a tabela na primeira vez se não existir
     await sql`
       create table if not exists ml_tokens (
         id            int primary key default 1,
         access_token  text not null,
-        refresh_token text not null,
+        refresh_token text,
         user_id       text,
         expires_at    timestamptz not null,
         atualizado_em timestamptz not null default now(),
         constraint single_row check (id = 1)
       )
     `
+    // Se a tabela já existia de uma tentativa anterior com a constraint antiga
+    // (not null em refresh_token), remove essa restrição agora
+    await sql`alter table ml_tokens alter column refresh_token drop not null`
 
     const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000)
 
     await sql`
       insert into ml_tokens (id, access_token, refresh_token, user_id, expires_at, atualizado_em)
-      values (1, ${tokenData.access_token}, ${tokenData.refresh_token}, ${String(tokenData.user_id)}, ${expiresAt.toISOString()}, now())
+      values (1, ${tokenData.access_token}, ${refreshToken}, ${String(tokenData.user_id)}, ${expiresAt.toISOString()}, now())
       on conflict (id) do update set
         access_token  = excluded.access_token,
         refresh_token = excluded.refresh_token,
@@ -95,14 +105,23 @@ export default async function handler(req, res) {
       <html>
       <head><meta charset="utf-8"><title>Autorizado!</title></head>
       <body style="font-family:sans-serif; background:#0f1117; color:#e8eaf6; display:flex; align-items:center; justify-content:center; height:100vh; margin:0;">
-        <div style="text-align:center; max-width:500px;">
+        <div style="text-align:center; max-width:520px;">
           <h1>✅ Autorizado com sucesso!</h1>
           <p>O token de acesso ao Mercado Livre foi salvo no banco de dados.</p>
           <p style="color:#8b90a7; font-size:0.9rem;">
             Seller ID: <code>${tokenData.user_id}</code><br>
-            Expira em: ${expiresAt.toLocaleString('pt-BR')}<br>
-            (será renovado automaticamente antes de expirar)
+            Expira em: ${expiresAt.toLocaleString('pt-BR')}
           </p>
+          ${semRefresh ? `
+          <p style="background:#3a2a0f; color:#ffd88a; padding:12px 16px; border-radius:8px; font-size:0.85rem; text-align:left;">
+            ⚠️ <strong>Atenção:</strong> o Mercado Livre não devolveu um refresh_token desta vez.
+            Isso significa que a renovação automática não vai funcionar — você precisará
+            repetir esta autorização manualmente a cada ~6 horas, ou ajustar o tipo da
+            aplicação no DevCenter para uma que emita refresh_token (geralmente aplicações
+            "Web" com fluxo Authorization Code completo).
+          </p>` : `
+          <p style="color:#8b90a7; font-size:0.85rem;">(será renovado automaticamente antes de expirar)</p>
+          `}
           <p>Pode fechar esta aba e voltar pro chat.</p>
         </div>
       </body>
