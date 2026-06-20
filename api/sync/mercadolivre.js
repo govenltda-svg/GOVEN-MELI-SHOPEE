@@ -42,6 +42,7 @@ async function fetchPaginaML(limit, offset, accessToken, sellerId) {
 // ── Grava pedidos via UPSERT em SQL puro (Neon não tem .upsert() pronto) ──
 async function gravarPedidos(orders) {
   let novos = 0
+  const skusJaGarantidos = new Set() // evita repetir o insert no catálogo pro mesmo SKU
 
   for (const order of orders) {
     if (order.status === 'cancelled') continue
@@ -58,6 +59,17 @@ async function gravarPedidos(orders) {
       const taxa    = item.sale_fee || 0
       const receita = parseFloat((preco * qtd).toFixed(2))
       const taxaTot = parseFloat((taxa * qtd).toFixed(2))
+
+      // Garante que o SKU existe no catálogo antes de inserir o pedido
+      // (evita erro de foreign key se for um produto novo/não mapeado)
+      if (!skusJaGarantidos.has(sku)) {
+        await sql`
+          insert into catalog (sku, nome, canal_origem)
+          values (${sku}, ${titulo.slice(0,200)}, 'ml')
+          on conflict (sku) do nothing
+        `
+        skusJaGarantidos.add(sku)
+      }
 
       // ON CONFLICT faz o papel do upsert do Supabase
       await sql`

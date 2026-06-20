@@ -54,6 +54,8 @@ async function fetchDetalhesShopee(orderSns) {
 
 async function gravarPedidosShopee(orders, statusInterno) {
   let novos = 0
+  const skusJaGarantidos = new Set()
+
   for (const order of orders) {
     if (order.order_status === 'CANCELLED') continue
     const dt         = new Date(order.create_time * 1000)
@@ -67,6 +69,16 @@ async function gravarPedidosShopee(orders, statusInterno) {
       const preco   = item.model_discounted_price
       const receita = parseFloat((preco * qtd).toFixed(2))
       const taxa    = parseFloat((receita * COMISSAO_SHOPEE).toFixed(2))
+
+      // Garante que o SKU existe no catálogo antes de inserir o pedido
+      if (!skusJaGarantidos.has(sku)) {
+        await sql`
+          insert into catalog (sku, nome, canal_origem)
+          values (${sku}, ${item.item_name.slice(0,200)}, 'sh')
+          on conflict (sku) do nothing
+        `
+        skusJaGarantidos.add(sku)
+      }
 
       await sql`
         insert into pedidos (
@@ -110,9 +122,11 @@ async function sincronizarStatus(statusShopee) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' })
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return res.status(405).json({ erro: 'Método não permitido' })
+  }
 
-  const secret = req.headers['x-sync-secret']
+  const secret = req.headers['x-sync-secret'] || req.query.secret
   if (secret !== process.env.SYNC_SECRET) return res.status(401).json({ erro: 'Não autorizado' })
 
   const inicio = Date.now()
