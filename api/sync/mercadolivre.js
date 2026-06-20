@@ -83,9 +83,13 @@ async function gravarPedidos(orders) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' })
+  // Aceita POST (uso programático, com header) ou GET (uso manual, com
+  // ?secret=... na URL — só para facilitar testes pelo navegador)
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return res.status(405).json({ erro: 'Método não permitido' })
+  }
 
-  const secret = req.headers['x-sync-secret']
+  const secret = req.headers['x-sync-secret'] || req.query.secret
   if (secret !== process.env.SYNC_SECRET) return res.status(401).json({ erro: 'Não autorizado' })
 
   const inicio = Date.now()
