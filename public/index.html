@@ -1,20 +1,570 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Goven API</title>
-  <style>
-    body { background:#0f1117; color:#e8eaf6; font-family:-apple-system,sans-serif; display:flex; align-items:center; justify-content:center; height:100vh; margin:0; }
-    .box { text-align:center; }
-    h1 { font-size:1.5rem; } h1 span { color:#00d97e; }
-    p { color:#8b90a7; font-size:0.9rem; }
-    code { background:#1a1d27; padding:2px 8px; border-radius:4px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Goven — Dashboard Financeiro</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap');
+  :root {
+    --bg:#0f1117; --surface:#1a1d27; --surface2:#22263a; --border:#2e3248;
+    --ml:#ffe600; --sh:#ee4d2d; --az:#ff9900; --green:#00d97e;
+    --red:#ff4757; --amber:#ffa502; --blue:#4d9fff;
+    --text:#e8eaf6; --muted:#8b90a7;
+    --ff:'Space Grotesk',sans-serif; --fb:'Inter',sans-serif; --radius:12px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--fb);min-height:100vh;}
+
+  .header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .header-left{display:flex;align-items:center;gap:14px;}
+  .logo{font-family:var(--ff);font-size:1.2rem;font-weight:700;letter-spacing:-.03em;}
+  .logo span{color:var(--green);}
+  .badges{display:flex;gap:6px;flex-wrap:wrap;}
+  .badge{font-size:.62rem;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:.05em;}
+  .badge.ml{background:rgba(255,230,0,.1);color:var(--ml);border:1px solid rgba(255,230,0,.3);}
+  .badge.sh{background:rgba(238,77,45,.1);color:var(--sh);border:1px solid rgba(238,77,45,.3);}
+  .badge.az{background:rgba(255,153,0,.1);color:var(--az);border:1px solid rgba(255,153,0,.3);opacity:.5;}
+
+  .sync-wrap{display:flex;align-items:center;gap:10px;}
+  .sync-info{font-size:.68rem;color:var(--muted);text-align:right;line-height:1.4;}
+  .sync-info strong{color:var(--text);display:block;}
+  .btn-sync{display:inline-flex;align-items:center;gap:6px;font-size:.76rem;font-weight:700;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;font-family:var(--fb);transition:all .2s;white-space:nowrap;}
+  .btn-sync:hover{border-color:var(--green);color:var(--green);}
+  .btn-sync.loading{opacity:.6;pointer-events:none;cursor:not-allowed;}
+  .btn-sync svg{transition:transform .6s;}
+  .btn-sync.loading svg{animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .container{max-width:1400px;margin:0 auto;padding:20px 18px 70px;}
+
+  .period-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .period-label{font-size:.65rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap;}
+  .period-shortcuts{display:flex;gap:5px;flex-wrap:wrap;}
+  .pshort{font-size:.72rem;font-weight:600;padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap;}
+  .pshort:hover{color:var(--text);border-color:var(--text);}
+  .pshort.active{background:rgba(0,217,126,.1);color:var(--green);border-color:rgba(0,217,126,.35);}
+  .period-divider{width:1px;height:22px;background:var(--border);flex-shrink:0;}
+  .date-range{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+  .date-range label{font-size:.68rem;color:var(--muted);white-space:nowrap;}
+  .date-input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--fb);font-size:.76rem;padding:5px 9px;outline:none;transition:border .15s;cursor:pointer;}
+  .date-input:focus{border-color:var(--green);}
+  .date-input::-webkit-calendar-picker-indicator{filter:invert(.5);}
+  .period-applied{margin-left:auto;font-size:.68rem;color:var(--green);font-weight:600;background:rgba(0,217,126,.08);border:1px solid rgba(0,217,126,.2);border-radius:5px;padding:3px 9px;white-space:nowrap;}
+  .period-applied.warn{color:var(--amber);background:rgba(255,165,2,.08);border-color:rgba(255,165,2,.2);}
+
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:20px;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:15px 16px;position:relative;overflow:hidden;}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+  .card.c-white::before{background:rgba(232,234,246,.15);}
+  .card.c-red::before{background:var(--red);}
+  .card.c-amber::before{background:var(--amber);}
+  .card.c-green::before{background:var(--green);}
+  .card.c-blue::before{background:var(--blue);}
+  .cl{font-size:.6rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;}
+  .cv{font-family:var(--ff);font-size:1.4rem;font-weight:700;letter-spacing:-.03em;line-height:1;}
+  .cv.g{color:var(--green);} .cv.r{color:var(--red);} .cv.a{color:var(--amber);}
+  .cv.w{color:var(--text);} .cv.b{color:var(--blue);}
+  .cs{font-size:.65rem;color:var(--muted);margin-top:4px;}
+
+  .sec{font-family:var(--ff);font-size:.75rem;font-weight:600;color:var(--muted);letter-spacing:.07em;text-transform:uppercase;margin:20px 0 10px;display:flex;align-items:center;gap:8px;}
+  .sec::after{content:'';flex:1;height:1px;background:var(--border);}
+
+  .filters{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;align-items:center;}
+  .filter-btn{font-size:.68rem;font-weight:600;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;transition:all .15s;}
+  .filter-btn.active-ml{background:rgba(255,230,0,.12);color:var(--ml);border-color:rgba(255,230,0,.35);}
+  .filter-btn.active-sh{background:rgba(238,77,45,.12);color:var(--sh);border-color:rgba(238,77,45,.35);}
+  .filter-btn.active-all{background:rgba(0,217,126,.1);color:var(--green);border-color:rgba(0,217,126,.3);}
+
+  .tscroll{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);}
+  table{width:100%;border-collapse:collapse;min-width:900px;}
+  thead{background:var(--surface2);position:sticky;top:0;z-index:2;}
+  th{font-size:.6rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:10px;text-align:right;white-space:nowrap;}
+  th:first-child{text-align:left;}
+  td{padding:10px;font-size:.8rem;text-align:right;border-top:1px solid var(--border);vertical-align:middle;background:var(--surface);}
+  td:first-child{text-align:left;}
+  tr:hover td{background:rgba(255,255,255,.02);}
+  tr.margin-warn td{background:rgba(255,165,2,.04)!important;}
+
+  .pname{font-weight:500;font-size:.78rem;line-height:1.3;max-width:220px;}
+  .pdate{font-size:.65rem;color:var(--muted);margin-top:2px;}
+  .cbadge{display:inline-block;font-size:.57rem;font-weight:700;padding:2px 6px;border-radius:4px;margin-top:3px;letter-spacing:.05em;}
+  .cbadge.ml{background:rgba(255,230,0,.12);color:var(--ml);}
+  .cbadge.sh{background:rgba(238,77,45,.12);color:var(--sh);}
+
+  .sbadge{display:inline-flex;align-items:center;gap:4px;font-size:.6rem;font-weight:700;padding:3px 7px;border-radius:20px;white-space:nowrap;}
+  .sbadge.enviar{background:rgba(255,165,2,.12);color:var(--amber);border:1px solid rgba(255,165,2,.25);}
+  .sbadge.transito{background:rgba(77,159,255,.12);color:var(--blue);border:1px solid rgba(77,159,255,.25);}
+  .sbadge.concluido{background:rgba(0,217,126,.1);color:var(--green);border:1px solid rgba(0,217,126,.25);}
+
+  .pp{color:var(--green);font-weight:700;} .pn{color:var(--red);font-weight:700;}
+  .mpill{display:inline-flex;align-items:center;justify-content:center;min-width:50px;padding:3px 8px;border-radius:20px;font-size:.7rem;font-weight:700;}
+  .mpill.pos{background:rgba(0,217,126,.1);color:var(--green);}
+  .mpill.warn{background:rgba(255,165,2,.12);color:var(--amber);}
+  .mpill.neg{background:rgba(255,71,87,.1);color:var(--red);}
+
+  tfoot tr td{background:var(--surface2)!important;font-weight:700;border-top:2px solid var(--border);}
+  tfoot tr td:first-child{font-family:var(--ff);font-size:.8rem;}
+
+  .actions{display:flex;align-items:center;gap:9px;margin-top:16px;flex-wrap:wrap;}
+  .btn{font-weight:700;font-size:.82rem;border:none;border-radius:9px;padding:10px 20px;cursor:pointer;font-family:var(--fb);transition:all .15s;display:inline-flex;align-items:center;gap:7px;}
+  .btn.prim{background:var(--green);color:#081a0d;}
+  .btn.prim:hover{background:#00bf70;}
+
+  .note{background:rgba(255,165,2,.06);border:1px solid rgba(255,165,2,.18);border-radius:9px;padding:10px 14px;font-size:.74rem;color:#ffd88a;margin-top:12px;line-height:1.5;}
+  .updated{font-size:.65rem;color:var(--muted);margin-top:16px;}
+
+  .loading-state, .error-state{text-align:center;padding:60px 20px;color:var(--muted);}
+  .error-state{color:var(--red);}
+
+  /* ── CATALOG MODAL ── */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center;padding:20px;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:100%;max-width:760px;max-height:88vh;overflow-y:auto;}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+  .modal-title{font-family:var(--ff);font-size:1rem;font-weight:700;}
+  .modal-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.3rem;line-height:1;padding:2px 6px;}
+  .modal-close:hover{color:var(--text);}
+  .catalog-table{width:100%;border-collapse:collapse;font-size:.76rem;}
+  .catalog-table th{font-size:.58rem;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:8px;text-align:right;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);}
+  .catalog-table th:first-child{text-align:left;}
+  .catalog-table td{padding:7px 8px;border-bottom:1px solid rgba(46,50,72,.5);text-align:right;vertical-align:middle;}
+  .catalog-table td:first-child{text-align:left;font-weight:500;color:var(--text);}
+  .ci{background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:.74rem;font-family:var(--fb);padding:5px 7px;width:78px;text-align:right;outline:none;transition:border .15s;-moz-appearance:textfield;}
+  .ci:focus{border-color:var(--green);}
+  .ci::-webkit-inner-spin-button,.ci::-webkit-outer-spin-button{-webkit-appearance:none;}
+  .sku-label{font-size:.58rem;color:var(--muted);display:block;margin-top:2px;font-family:monospace;}
+  .modal-footer{margin-top:18px;display:flex;gap:8px;justify-content:flex-end;align-items:center;}
+  .save-status{font-size:.74rem;color:var(--muted);margin-right:auto;}
+  .save-status.ok{color:var(--green);}
+  .save-status.err{color:var(--red);}
+  .btn.sec{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+  .btn-catalog{font-size:.68rem;font-weight:600;padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px;margin-left:auto;}
+  .btn-catalog:hover{color:var(--text);border-color:var(--text);}
+
+  @media print{
+    .period-bar,.actions,.sync-wrap,.filters{display:none!important;}
+    body{background:#fff!important;color:#111!important;}
+  }
+</style>
 </head>
 <body>
-  <div class="box">
-    <h1>Go<span>ven</span> API</h1>
-    <p>Backend ativo. Endpoints disponíveis em <code>/api/pedidos</code>, <code>/api/sync/mercadolivre</code>, <code>/api/sync/shopee</code>.</p>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">Go<span>ven</span></div>
+    <div class="badges">
+      <span class="badge ml">● Mercado Livre</span>
+      <span class="badge sh">● Shopee</span>
+    </div>
   </div>
+  <div class="sync-wrap">
+    <div class="sync-info">
+      <strong id="syncTime">—</strong>
+      <span id="syncDetail">carregando…</span>
+    </div>
+    <button class="btn-sync" id="btnSync" onclick="recarregarDados()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
+        <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+      </svg>
+      <span id="syncLabel">Atualizar</span>
+    </button>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ══════════════ CATALOG MODAL ══════════════ -->
+  <div class="modal-overlay" id="catalogModal">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">📦 Custos por Produto</div>
+        <button class="modal-close" onclick="fecharCatalogo()">✕</button>
+      </div>
+      <p style="font-size:.74rem;color:var(--muted);margin-bottom:14px;line-height:1.6;">
+        Preencha o custo de cada produto <strong style="color:var(--text)">uma única vez</strong>.
+        Esses valores são aplicados automaticamente em todas as vendas desse SKU, em qualquer período.
+      </p>
+      <div style="max-height:50vh;overflow-y:auto;">
+        <table class="catalog-table">
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th>Custo prod.</th>
+              <th>Embalagem</th>
+              <th>Frete fixo</th>
+              <th>Anúncio</th>
+              <th>Imposto %</th>
+              <th>Devolução R$</th>
+            </tr>
+          </thead>
+          <tbody id="catalogBody">
+            <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">Carregando catálogo…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <span class="save-status" id="saveStatus"></span>
+        <button class="btn sec" onclick="fecharCatalogo()">Fechar</button>
+        <button class="btn prim" onclick="salvarCatalogo()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Salvar custos
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="period-bar">
+    <span class="period-label">Período</span>
+    <div class="period-shortcuts">
+      <button class="pshort" id="ps-hoje" onclick="setPreset('hoje')">Hoje</button>
+      <button class="pshort" id="ps-7"    onclick="setPreset('7d')">Últimos 7 dias</button>
+      <button class="pshort active" id="ps-30" onclick="setPreset('30d')">Últimos 30 dias</button>
+      <button class="pshort" id="ps-all"  onclick="setPreset('all')">Todo o período</button>
+    </div>
+    <div class="period-divider"></div>
+    <div class="date-range">
+      <label>De</label>
+      <input class="date-input" type="date" id="dateFrom" onchange="setCustomRange()">
+      <label>até</label>
+      <input class="date-input" type="date" id="dateTo" onchange="setCustomRange()">
+    </div>
+    <div class="period-applied" id="periodLabel">Últimos 30 dias</div>
+  </div>
+
+  <div class="cards">
+    <div class="card c-blue"><div class="cl">Total de Pedidos</div><div class="cv b" id="cPedidos">—</div><div class="cs" id="cPedidosSub">carregando…</div></div>
+    <div class="card c-white"><div class="cl">Receita Total</div><div class="cv w" id="cReceita">—</div><div class="cs">ML + Shopee, bruto</div></div>
+    <div class="card c-red"><div class="cl">Taxas Plataformas</div><div class="cv r" id="cTaxas">—</div><div class="cs">Comissões</div></div>
+    <div class="card c-amber"><div class="cl">Custos + Despesas</div><div class="cv a" id="cCusto">—</div><div class="cs">CMV, embalagem, frete, anúncio</div></div>
+    <div class="card c-green"><div class="cl">Lucro Líquido Real</div><div class="cv g" id="cLucro">—</div><div class="cs" id="cMargem">Margem geral</div></div>
+  </div>
+
+  <div class="sec">Pedidos por canal</div>
+  <div class="filters">
+    <button class="filter-btn active-all" id="btnAll" onclick="setChannelFilter('all')">Todos os canais</button>
+    <button class="filter-btn" id="btnML" onclick="setChannelFilter('ml')">Mercado Livre</button>
+    <button class="filter-btn" id="btnSH" onclick="setChannelFilter('sh')">Shopee</button>
+    <button class="btn-catalog" onclick="abrirCatalogo()">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      Editar custos por produto
+    </button>
+  </div>
+
+  <div id="tableArea">
+    <div class="loading-state">Carregando pedidos do banco de dados…</div>
+  </div>
+
+  <div class="actions">
+    <button class="btn prim" onclick="window.print()">🖨 Exportar PDF</button>
+  </div>
+  <div class="updated" id="updFooter"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+// CONFIGURAÇÃO — a API fica no mesmo domínio (sem CORS)
+// ═══════════════════════════════════════════════════
+const API_BASE = ''; // mesmo domínio do Vercel — deixe vazio
+const SYNC_SECRET = 'goven2026xyz789'; // mesmo valor configurado no Vercel
+
+const STATE = { channelFilter: 'all', preset: '30d', dateFrom: null, dateTo: null };
+let DADOS_ATUAIS = { pedidos: [], totais: {} };
+
+const fmt  = v => 'R$ ' + Math.abs(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtS = v => (v < 0 ? '-' : '') + fmt(v);
+const toDay = s => new Date(s + 'T00:00:00');
+const fmtBR = d => d.toLocaleDateString('pt-BR');
+const fmtTime = d => d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+const toISO = d => d.toISOString().slice(0,10);
+
+const STATUS_CFG = {
+  enviar:    { label:'A Enviar',    cls:'enviar',   icon:'📦' },
+  transito:  { label:'Em Trânsito', cls:'transito', icon:'🚚' },
+  concluido: { label:'Concluído',   cls:'concluido',icon:'✅' },
+};
+function statusBadge(s) {
+  const c = STATUS_CFG[s] || {label:s, cls:'', icon:''};
+  return `<span class="sbadge ${c.cls}">${c.icon} ${c.label}</span>`;
+}
+
+function periodBounds() {
+  const today = toDay(toISO(new Date()));
+  if (STATE.preset === 'hoje') return { from: today, to: today };
+  if (STATE.preset === '7d')  { const f = new Date(today); f.setDate(f.getDate()-6); return {from:f, to:today}; }
+  if (STATE.preset === '30d') { const f = new Date(today); f.setDate(f.getDate()-29); return {from:f, to:today}; }
+  if (STATE.preset === 'custom' && STATE.dateFrom && STATE.dateTo)
+    return { from: toDay(STATE.dateFrom), to: toDay(STATE.dateTo) };
+  // 'all' — janela ampla o suficiente para cobrir todo o histórico
+  return { from: toDay('2020-01-01'), to: today };
+}
+
+const PRESET_MAP = { hoje:'ps-hoje', '7d':'ps-7', '30d':'ps-30', all:'ps-all' };
+
+function setPreset(p) {
+  STATE.preset = p;
+  const today = toISO(new Date());
+  const di = document.getElementById('dateFrom'), df = document.getElementById('dateTo');
+  if (p==='hoje')     { di.value=today; df.value=today; }
+  else if (p==='7d')  { const f=new Date(); f.setDate(f.getDate()-6); di.value=toISO(f); df.value=today; }
+  else if (p==='30d') { const f=new Date(); f.setDate(f.getDate()-29); di.value=toISO(f); df.value=today; }
+  else                { di.value=''; df.value=''; }
+  Object.entries(PRESET_MAP).forEach(([k,id]) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('active', k===p);
+  });
+  carregarDados();
+}
+
+function setCustomRange() {
+  const from = document.getElementById('dateFrom').value;
+  const to   = document.getElementById('dateTo').value;
+  if (!from || !to) return;
+  STATE.preset = 'custom'; STATE.dateFrom = from; STATE.dateTo = to;
+  Object.values(PRESET_MAP).forEach(id => { const el=document.getElementById(id); if(el) el.classList.remove('active'); });
+  carregarDados();
+}
+
+function setChannelFilter(f) {
+  STATE.channelFilter = f;
+  document.getElementById('btnAll').className = 'filter-btn'+(f==='all'?' active-all':'');
+  document.getElementById('btnML').className  = 'filter-btn'+(f==='ml'?' active-ml':'');
+  document.getElementById('btnSH').className  = 'filter-btn'+(f==='sh'?' active-sh':'');
+  renderizar();
+}
+
+// ═══════════════════════════════════════════════════
+// BUSCA DE DADOS — chama a API real
+// ═══════════════════════════════════════════════════
+async function carregarDados() {
+  const { from, to } = periodBounds();
+  const url = `${API_BASE}/api/pedidos?de=${toISO(from)}&ate=${toISO(to)}&canal=all`;
+
+  document.getElementById('tableArea').innerHTML = '<div class="loading-state">Carregando pedidos…</div>';
+
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (!data.ok) throw new Error(data.erro || 'Erro desconhecido na API');
+
+    DADOS_ATUAIS = data;
+    renderizar();
+
+    const pLabel = document.getElementById('periodLabel');
+    if (data.pedidos.length === 0) {
+      pLabel.textContent = 'Nenhum pedido nesse período';
+      pLabel.className = 'period-applied warn';
+    } else {
+      pLabel.textContent = `${fmtBR(from)} → ${fmtBR(to)}`;
+      pLabel.className = 'period-applied';
+    }
+
+  } catch (e) {
+    document.getElementById('tableArea').innerHTML =
+      `<div class="error-state">⚠️ Erro ao carregar dados: ${e.message}<br><br>
+       <span style="font-size:.8rem;color:var(--muted)">Verifique se a API está no ar e se este dashboard está hospedado no mesmo domínio do Vercel.</span></div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// RENDERIZAÇÃO — desenha cards + tabela a partir dos dados já carregados
+// ═══════════════════════════════════════════════════
+function renderizar() {
+  const pedidosFiltrados = DADOS_ATUAIS.pedidos.filter(p =>
+    STATE.channelFilter === 'all' || p.canal === STATE.channelFilter
+  );
+
+  let tRec=0, tTax=0, tCusto=0, tLuc=0, tQtd=0;
+  pedidosFiltrados.forEach(p => {
+    tRec   += p.receita;
+    tTax   += p.taxa_plataforma;
+    tLuc   += p.lucro;
+    tQtd   += p.quantidade;
+    const c = p.custos_usados;
+    tCusto += (c.cmv + c.emb + c.frt + c.anu) * p.quantidade + (c.imp/100)*p.receita + c.dev*p.quantidade;
+  });
+  const mG = tRec > 0 ? (tLuc / tRec * 100) : 0;
+
+  document.getElementById('cPedidos').textContent = pedidosFiltrados.length;
+  document.getElementById('cPedidosSub').textContent = `${pedidosFiltrados.length} pedido${pedidosFiltrados.length!==1?'s':''} no período`;
+  document.getElementById('cReceita').textContent = fmt(tRec);
+  document.getElementById('cTaxas').textContent = '-' + fmt(tTax);
+  document.getElementById('cCusto').textContent = '-' + fmt(tCusto);
+  const cl = document.getElementById('cLucro');
+  cl.textContent = fmtS(tLuc); cl.className = 'cv ' + (tLuc >= 0 ? 'g' : 'r');
+  document.getElementById('cMargem').textContent = `Margem: ${mG.toFixed(1)}% sobre receita`;
+
+  // Tabela
+  if (pedidosFiltrados.length === 0) {
+    document.getElementById('tableArea').innerHTML =
+      '<div class="loading-state">Nenhum pedido encontrado neste período/canal.</div>';
+    return;
+  }
+
+  let html = `
+    <div class="tscroll">
+      <table>
+        <thead><tr>
+          <th style="text-align:left">Produto</th><th>Status</th><th>Qtd</th>
+          <th>Receita</th><th>Taxa</th><th>Lucro</th><th>Margem</th>
+        </tr></thead>
+        <tbody>`;
+
+  pedidosFiltrados.forEach(p => {
+    const margemCls = p.margem < 0 ? 'neg' : (p.alerta_margem ? 'warn' : 'pos');
+    const rowWarnClass = (p.margem >= 0 && p.alerta_margem) ? 'margin-warn' : '';
+    html += `
+      <tr class="${rowWarnClass}">
+        <td>
+          <div class="pname">${p.nome_produto.length > 55 ? p.nome_produto.slice(0,55)+'…' : p.nome_produto}</div>
+          <span class="cbadge ${p.canal}">${p.canal === 'ml' ? 'Mercado Livre' : 'Shopee'}</span>
+          <div class="pdate">${fmtBR(toDay(p.data_pedido))}${p.hora_pedido ? ' · ' + p.hora_pedido.slice(0,5) : ''}</div>
+        </td>
+        <td style="text-align:center">${statusBadge(p.status)}</td>
+        <td>${p.quantidade}</td>
+        <td>${fmt(p.receita)}</td>
+        <td style="color:var(--red)">-${fmt(p.taxa_plataforma)}</td>
+        <td class="${p.lucro >= 0 ? 'pp' : 'pn'}">${fmtS(p.lucro)}</td>
+        <td><span class="mpill ${margemCls}">${p.margem.toFixed(1)}%</span></td>
+      </tr>`;
+  });
+
+  html += `
+        </tbody>
+        <tfoot><tr>
+          <td colspan="2">TOTAL DO PERÍODO</td>
+          <td>${tQtd}</td>
+          <td>${fmt(tRec)}</td>
+          <td style="color:var(--red)">-${fmt(tTax)}</td>
+          <td class="${tLuc>=0?'pp':'pn'}">${fmtS(tLuc)}</td>
+          <td><span class="mpill ${mG<0?'neg':mG<15?'warn':'pos'}">${mG.toFixed(1)}%</span></td>
+        </tr></tfoot>
+      </table>
+    </div>`;
+
+  document.getElementById('tableArea').innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════════
+// SYNC BUTTON — chama de verdade a API de sincronização
+// ═══════════════════════════════════════════════════
+async function recarregarDados() {
+  const btn = document.getElementById('btnSync');
+  const lbl = document.getElementById('syncLabel');
+  btn.classList.add('loading'); lbl.textContent = 'Sincronizando…';
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/sync/mercadolivre?secret=${SYNC_SECRET}`);
+    const data = await resp.json();
+
+    const now = new Date();
+    document.getElementById('syncTime').textContent = `Hoje às ${fmtTime(now)}`;
+    document.getElementById('syncDetail').textContent = data.concluido
+      ? `✅ ${data.pedidos_novos} pedidos atualizados`
+      : `⏳ Parcial — ${data.pedidos_novos} processados, continue clicando`;
+
+    await carregarDados();
+  } catch (e) {
+    document.getElementById('syncDetail').textContent = `Erro: ${e.message}`;
+  }
+
+  btn.classList.remove('loading'); lbl.textContent = 'Atualizar';
+}
+
+// ═══════════════════════════════════════════════════
+// CATÁLOGO — modal de edição de custos por SKU
+// ═══════════════════════════════════════════════════
+let CATALOG_CACHE = [];
+
+async function abrirCatalogo() {
+  document.getElementById('catalogModal').classList.add('open');
+  const tbody = document.getElementById('catalogBody');
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">Carregando catálogo…</td></tr>';
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/catalog`);
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.erro || 'Erro ao carregar catálogo');
+
+    CATALOG_CACHE = data.catalog;
+    renderizarCatalogo();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red)">Erro: ${e.message}</td></tr>`;
+  }
+}
+
+function renderizarCatalogo() {
+  const tbody = document.getElementById('catalogBody');
+  tbody.innerHTML = '';
+
+  CATALOG_CACHE.forEach((c, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${c.nome}<span class="sku-label">${c.sku}</span></td>
+      <td><input class="ci" data-i="${i}" data-field="cmv"           type="number" min="0" step="0.01" value="${c.cmv || ''}"           placeholder="0,00"></td>
+      <td><input class="ci" data-i="${i}" data-field="embalagem"     type="number" min="0" step="0.01" value="${c.embalagem || ''}"     placeholder="0,00"></td>
+      <td><input class="ci" data-i="${i}" data-field="frete_fixo"    type="number" min="0" step="0.01" value="${c.frete_fixo || ''}"    placeholder="0,00"></td>
+      <td><input class="ci" data-i="${i}" data-field="anuncio"       type="number" min="0" step="0.01" value="${c.anuncio || ''}"       placeholder="0,00"></td>
+      <td><input class="ci" data-i="${i}" data-field="imposto_pct"   type="number" min="0" step="0.01" value="${c.imposto_pct || ''}"   placeholder="%" title="% da receita"></td>
+      <td><input class="ci" data-i="${i}" data-field="devolucao"     type="number" min="0" step="0.01" value="${c.devolucao || ''}"     placeholder="0,00" title="R$ por devolução"></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+async function salvarCatalogo() {
+  const statusEl = document.getElementById('saveStatus');
+  statusEl.textContent = 'Salvando…';
+  statusEl.className = 'save-status';
+
+  // Lê todos os inputs e monta o payload
+  const inputs = document.querySelectorAll('#catalogBody .ci');
+  const porSku = {};
+  inputs.forEach(el => {
+    const i = parseInt(el.dataset.i);
+    const sku = CATALOG_CACHE[i].sku;
+    if (!porSku[sku]) porSku[sku] = { sku };
+    porSku[sku][el.dataset.field] = parseFloat(el.value) || 0;
+  });
+
+  const items = Object.values(porSku);
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/catalog`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-sync-secret': SYNC_SECRET,
+      },
+      body: JSON.stringify({ items }),
+    });
+    const data = await resp.json();
+    if (!data.ok) throw new Error(data.erro || 'Erro ao salvar');
+
+    statusEl.textContent = `✅ ${data.atualizados} produto(s) salvos`;
+    statusEl.className = 'save-status ok';
+
+    // Recarrega os pedidos para refletir os novos custos imediatamente
+    await carregarDados();
+
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+  } catch (e) {
+    statusEl.textContent = `Erro: ${e.message}`;
+    statusEl.className = 'save-status err';
+  }
+}
+
+function fecharCatalogo() {
+  document.getElementById('catalogModal').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════
+setPreset('30d'); // já chama carregarDados()
+document.getElementById('syncTime').textContent = `Carregado às ${fmtTime(new Date())}`;
+document.getElementById('updFooter').textContent = `Dashboard Goven · conectado ao banco em tempo real`;
+</script>
 </body>
 </html>
