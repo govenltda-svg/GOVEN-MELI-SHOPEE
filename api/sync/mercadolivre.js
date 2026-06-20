@@ -105,41 +105,82 @@ export default async function handler(req, res) {
   if (secret !== process.env.SYNC_SECRET) return res.status(401).json({ erro: 'Não autorizado' })
 
   const inicio = Date.now()
-  let totalNovos = 0
-  let totalProcessados = 0
+  const LIMIT_TEMPO_MS = 8000 // margem de segurança abaixo do limite de 10s do plano Hobby
+  const PAGE_SIZE = 50
 
   try {
+    // Tabela de controle de progresso — permite retomar de onde parou
+    await sql`
+      create table if not exists sync_state (
+        canal  text primary key,
+        offset_atual int not null default 0,
+        total_api    int,
+        atualizado_em timestamptz not null default now()
+      )
+    `
+
     // Renova o token automaticamente se necessário, e busca o seller_id salvo
     const accessToken = await renovarTokenSeNecessario()
     const tokenRow     = await sql`select user_id from ml_tokens where id = 1`
     const sellerId     = tokenRow[0]?.user_id
-
     if (!sellerId) throw new Error('seller_id não encontrado — refaça a autorização inicial')
 
-    const LIMIT = 50
-    let offset = 0
-    let totalAPI = Infinity
+    // Recupera o progresso salvo (ou começa do zero)
+    const estadoRows = await sql`select * from sync_state where canal = 'ml'`
+    let offset   = estadoRows[0]?.offset_atual ?? 0
+    let totalAPI = estadoRows[0]?.total_api ?? Infinity
 
-    while (offset < totalAPI) {
-      const { orders, total } = await fetchPaginaML(LIMIT, offset, accessToken, sellerId)
+    let totalNovos = 0
+    let totalProcessados = 0
+    let paginasNestaExecucao = 0
+
+    // Processa páginas até estourar o tempo seguro ou terminar tudo
+    while (offset < totalAPI && (Date.now() - inicio) < LIMIT_TEMPO_MS) {
+      const { orders, total } = await fetchPaginaML(PAGE_SIZE, offset, accessToken, sellerId)
       totalAPI = total
 
       const novos = await gravarPedidos(orders)
       totalNovos       += novos
       totalProcessados += orders.length
-      offset           += LIMIT
+      offset           += PAGE_SIZE
+      paginasNestaExecucao++
 
-      if (offset > 2000) break // segurança
+      // Se a API não retornou mais nada, considera concluído mesmo que offset < total
+      if (orders.length === 0) break
     }
+
+    const concluido = offset >= totalAPI
+
+    // Salva o progresso (zera quando concluído, para recomeçar do zero na próxima sync completa)
+    await sql`
+      insert into sync_state (canal, offset_atual, total_api, atualizado_em)
+      values ('ml', ${concluido ? 0 : offset}, ${totalAPI}, now())
+      on conflict (canal) do update set
+        offset_atual  = excluded.offset_atual,
+        total_api     = excluded.total_api,
+        atualizado_em = now()
+    `
 
     await sql`
       insert into sync_log (canal, status, pedidos_novos, pedidos_total, mensagem)
-      values ('ml', 'ok', ${totalNovos}, ${totalProcessados}, ${`Paginação completa: ${Math.ceil(totalAPI / LIMIT)} páginas`})
+      values ('ml', 'ok', ${totalNovos}, ${totalProcessados},
+        ${concluido
+          ? `Sincronização completa: ${paginasNestaExecucao} página(s) nesta chamada`
+          : `Parcial: parou em offset ${offset}/${totalAPI} (tempo esgotado) — próxima chamada continua daqui`})
     `
 
     return res.status(200).json({
-      ok: true, pedidos_novos: totalNovos, pedidos_total: totalProcessados,
-      total_api: totalAPI, duracao_ms: Date.now() - inicio,
+      ok: true,
+      concluido,
+      pedidos_novos: totalNovos,
+      pedidos_processados_nesta_chamada: totalProcessados,
+      offset_atual: concluido ? 0 : offset,
+      total_api: totalAPI,
+      paginas_nesta_execucao: paginasNestaExecucao,
+      duracao_ms: Date.now() - inicio,
+      aviso: concluido
+        ? null
+        : 'Sincronização parcial — chame este endpoint de novo para continuar de onde parou.',
     })
 
   } catch (e) {
